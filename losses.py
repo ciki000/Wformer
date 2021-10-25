@@ -41,7 +41,7 @@ class TVLoss(nn.Module):
 class CharbonnierLoss(nn.Module):
     """Charbonnier Loss (L1)"""
 
-    def __init__(self, eps=1e-3):
+    def __init__(self, eps=1e-6):
         super(CharbonnierLoss, self).__init__()
         self.eps = eps
 
