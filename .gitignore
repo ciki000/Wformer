@@ -139,3 +139,6 @@ cython_debug/
 
 #ignore log
 /log/
+
+#ignore nohup
+nohup.out
