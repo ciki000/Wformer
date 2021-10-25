@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 
 # add dir
 dir_name = os.path.dirname(os.path.abspath(__file__))
@@ -41,6 +42,21 @@ from torch.optim.lr_scheduler import StepLR
 from timm.utils import NativeScaler
 
 from utils.loader import  get_training_data,get_validation_data
+
+def expand2square(timg, factor=16.0):
+    b, c, h, w = timg.size()
+
+    X = int(math.ceil(max(h,w)/float(factor))*factor)
+
+    img = torch.zeros(b,c,X,X).type_as(timg) # 3, h,w
+    mask = torch.zeros(b,1,X,X).type_as(timg)
+
+    # print(img.size(),mask.size())
+    # print((X - h)//2, (X - h)//2+h, (X - w)//2, (X - w)//2+w)
+    img[:,:, ((X - h)//2):((X - h)//2 + h),((X - w)//2):((X - w)//2 + w)] = timg
+    mask[:,:, ((X - h)//2):((X - h)//2 + h),((X - w)//2):((X - w)//2 + w)].fill_(1.0)
+    
+    return img, mask
 
 ######### Logs dir ###########
 log_dir = os.path.join(dir_name,'log', opt.arch+opt.env)
@@ -120,7 +136,7 @@ train_loader = DataLoader(dataset=train_dataset, batch_size=opt.batch_size, shuf
         num_workers=opt.train_workers, pin_memory=True, drop_last=False)
 
 val_dataset = get_validation_data(opt.val_dir)
-val_loader = DataLoader(dataset=val_dataset, batch_size=opt.batch_size, shuffle=False, 
+val_loader = DataLoader(dataset=val_dataset, batch_size=1, shuffle=False, 
         num_workers=opt.eval_workers, pin_memory=False, drop_last=False)
 
 len_trainset = train_dataset.__len__()
@@ -176,11 +192,13 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                 psnr_val_rgb = []
                 for ii, data_val in enumerate((val_loader), 0):
                     target = data_val[0].cuda()
-                    input_ = data_val[1].cuda()
+                    input_, mask = expand2square(data_val[1].cuda(), factor=128) 
                     filenames = data_val[2]
                     with torch.cuda.amp.autocast():
-                        restored = model_restoration(input_)
-                    restored = torch.clamp(restored,0,1)  
+                        restored = model_restoration(input_, 1-mask)
+                     
+                    restored = torch.masked_select(restored,mask.bool()).reshape(target.shape[0], target.shape[1], target.shape[2], target.shape[3])
+                    restored = torch.clamp(restored,0,1) 
                     psnr_val_rgb.append(utils.batch_PSNR(restored, target, False).item())
 
                 psnr_val_rgb = sum(psnr_val_rgb)/len_valset
