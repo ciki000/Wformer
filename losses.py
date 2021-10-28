@@ -51,11 +51,11 @@ class CharbonnierLoss(nn.Module):
         loss = torch.mean(torch.sqrt((diff * diff) + (self.eps*self.eps)))
         return loss
 
-class MyLoss(nn.Module):
-    def __init__(self, eps=1e-6, window_size = 11, size_average = True):
-        super(MyLoss, self).__init__()
+class MixLoss(nn.Module):
+    def __init__(self, alpha=0.8, eps=1e-6, window_size = 11, size_average = True):
+        super(MixLoss, self).__init__()
         self.eps = eps
-
+        self.alpha = alpha
         # self.window_size = window_size
         # self.size_average = size_average
         # self.channel = 1
@@ -68,8 +68,8 @@ class MyLoss(nn.Module):
 
         """SSIM （0-1）"""
         ssim_module = SSIM(data_range=1., size_average=True, channel=3)
-        ssim_loss =  100*(1 - ssim_module(x, y)) 
-        loss =  l1_loss + ssim_loss  
+        ssim_loss = 1 - ssim_module(x, y)
+        loss =  (1-self.alpha)*l1_loss + self.alpha*ssim_loss  
         return loss
 
 class SSIMLoss(nn.Module):
