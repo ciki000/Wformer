@@ -54,7 +54,7 @@ def load_optim(optimizer, weights):
     return lr
 
 def get_arch(opt):
-    from model import UNet,Uformer,Uformer_Cross,Uformer_CatCross
+    from model import UNet,Uformer,Uformer_Cross,Uformer_CatCross,Wformer
     arch = opt.arch
 
     print('You choose '+arch+'...')

@@ -34,7 +34,7 @@ from einops import rearrange, repeat
 import datetime
 from pdb import set_trace as stx
 
-from losses import CharbonnierLoss
+from losses import CharbonnierLoss,SSIMLoss
 
 from tqdm import tqdm 
 from warmup_scheduler import GradualWarmupScheduler
@@ -42,8 +42,9 @@ from torch.optim.lr_scheduler import StepLR
 from timm.utils import NativeScaler
 
 from utils.loader import  get_training_data,get_validation_data
+from skimage.transform import resize
 
-def expand2square(timg, factor=16.0):
+def expand2square(timg, factor=128):
     b, c, h, w = timg.size()
 
     X = int(math.ceil(max(h,w)/float(factor))*factor)
@@ -57,6 +58,28 @@ def expand2square(timg, factor=16.0):
     mask[:,:, ((X - h)//2):((X - h)//2 + h),((X - w)//2):((X - w)//2 + w)].fill_(1.0)
     
     return img, mask
+
+def tensorResize(timg, factor=128):
+    b, c, h, w = timg.size()
+    X = int(math.ceil(max(h,w)/float(factor))*factor)
+
+    np_arr = timg.cpu().detach().numpy()
+    np_arr = np_arr[0].transpose((1,2,0))
+
+    #Image resize
+    im_np_resize = resize(np_arr, (X, X))
+    im_np_resize = im_np_resize.transpose((2,0,1))
+    im_np_resize = im_np_resize[np.newaxis,:]
+
+    return h, w, torch.from_numpy(im_np_resize).cuda()
+
+def recover(img, h, w):
+    np_arr = img.cpu().detach().numpy()
+    np_arr = np_arr[0].transpose((1,2,0))
+    im_np_resize = resize(np_arr, (h, w))
+    im_np_resize = im_np_resize.transpose((2,0,1))
+    im_np_resize = im_np_resize[np.newaxis,:]
+    return torch.from_numpy(im_np_resize).cuda()
 
 ######### Logs dir ###########
 log_dir = os.path.join(dir_name,'log', opt.arch+opt.env)
@@ -126,7 +149,7 @@ else:
 
 
 ######### Loss ###########
-criterion = CharbonnierLoss().cuda()
+criterion = SSIMLoss().cuda()
 
 ######### DataLoader ###########
 print('===> Loading datasets')
@@ -171,16 +194,15 @@ for epoch in range(start_epoch, opt.nepoch + 1):
     for i, data in enumerate(train_loader, 0): 
         # zero_grad
         optimizer.zero_grad()
-
         target = data[0].cuda()
         input_ = data[1].cuda()
 
         #if epoch>5:
         #    target, input_ = utils.MixUp_AUG().aug(target, input_)
-        with torch.cuda.amp.autocast():
-            restored = model_restoration(input_)
-            restored = torch.clamp(restored,0,1)  
-            loss = criterion(restored, target)
+        #with torch.cuda.amp.autocast():
+        restored = model_restoration(input_, 0)
+        restored = torch.clamp(restored,0,1)  
+        loss = criterion(restored, target)
         loss_scaler(
                 loss, optimizer,parameters=model_restoration.parameters())
         epoch_loss +=loss.item()
@@ -192,13 +214,14 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                 psnr_val_rgb = []
                 for ii, data_val in enumerate((val_loader), 0):
                     target = data_val[0].cuda()
-                    input_, mask = expand2square(data_val[1].cuda(), factor=128) 
+                    valh, valw, input_ = tensorResize(data_val[1].cuda(), factor=128) 
                     filenames = data_val[2]
-                    with torch.cuda.amp.autocast():
-                        restored = model_restoration(input_, 1-mask)
+                    restored = model_restoration(input_, 0)
                      
-                    restored = torch.masked_select(restored,mask.bool()).reshape(target.shape[0], target.shape[1], target.shape[2], target.shape[3])
+                    #restored = torch.masked_select(restored,mask.bool()).reshape(target.shape[0], target.shape[1], target.shape[2], target.shape[3])
                     restored = torch.clamp(restored,0,1) 
+
+                    restored = recover(restored, valh, valw)
                     psnr_val_rgb.append(utils.batch_PSNR(restored, target, False).item())
 
                 psnr_val_rgb = sum(psnr_val_rgb)/len_valset

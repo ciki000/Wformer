@@ -380,7 +380,9 @@ class WindowAttention(nn.Module):
 
     def forward(self, x, attn_kv=None, mask=None):
         B_, N, C = x.shape
-        q, k, v = self.qkv(x,attn_kv)
+        #print('x', x.shape)
+        q, k, v = self.qkv(x, attn_kv)
+        #print(q.shape, k.shape, v.shape)
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
 
@@ -388,9 +390,13 @@ class WindowAttention(nn.Module):
             self.win_size[0] * self.win_size[1], self.win_size[0] * self.win_size[1], -1)  # Wh*Ww,Wh*Ww,nH
         relative_position_bias = relative_position_bias.permute(2, 0, 1).contiguous()  # nH, Wh*Ww, Wh*Ww
         ratio = attn.size(-1)//relative_position_bias.size(-1)
+        #print(ratio)
+        #print('pos', relative_position_bias.shape)
         relative_position_bias = repeat(relative_position_bias, 'nH l c -> nH l (c d)', d = ratio)
+        #print('after', relative_position_bias.shape)
         
         attn = attn + relative_position_bias.unsqueeze(0)
+        #print('attn', attn.shape)
 
         if mask is not None:
             nW = mask.shape[0]
@@ -1298,6 +1304,8 @@ class Wformer(nn.Module):
                             norm_layer=norm_layer,
                             use_checkpoint=use_checkpoint,
                             token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
+        self.Bottleneck0_conv = WConvBlock(embed_dim*16, embed_dim*16, strides=1)
+        
         # W-Decoder
         self.Wup_0 = upsample(embed_dim*16, embed_dim*8)
         self.Wconv_d0 = WConvBlock(embed_dim*8, embed_dim*8, strides=1)
@@ -1343,10 +1351,13 @@ class Wformer(nn.Module):
                             norm_layer=norm_layer,
                             use_checkpoint=use_checkpoint,
                             token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
+        
+        self.Bottleneck1_conv = WConvBlock(embed_dim*16, embed_dim*16, strides=1)
+        
 
         # Decoder
         self.upsample_0 = upsample(embed_dim*32, embed_dim*8)
-        self.decoderbuf_0 = WConvBlock(embed_dim*16, embed_dim*16, strides=1)
+        #self.decoderbuf_0 = WConvBlock(embed_dim*16, embed_dim*16, strides=1)
         self.decoderlayer_0 = BasicUformerLayer(dim=embed_dim*16,
                             output_dim=embed_dim*16,
                             input_resolution=(img_size // (2 ** 3),
@@ -1363,7 +1374,7 @@ class Wformer(nn.Module):
                             token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
         
         self.upsample_1 = upsample(embed_dim*16, embed_dim*4)
-        self.decoderbuf_1 = WConvBlock(embed_dim*8, embed_dim*8, strides=1)
+        #self.decoderbuf_1 = WConvBlock(embed_dim*8, embed_dim*8, strides=1)
         self.decoderlayer_1 = BasicUformerLayer(dim=embed_dim*8,
                             output_dim=embed_dim*8,
                             input_resolution=(img_size // (2 ** 2),
@@ -1380,7 +1391,7 @@ class Wformer(nn.Module):
                             token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
         
         self.upsample_2 = upsample(embed_dim*8, embed_dim*2)
-        self.decoderbuf_2 = WConvBlock(embed_dim*4, embed_dim*4, strides=1)
+        #self.decoderbuf_2 = WConvBlock(embed_dim*4, embed_dim*4, strides=1)
         self.decoderlayer_2 = BasicUformerLayer(dim=embed_dim*4,
                             output_dim=embed_dim*4,
                             input_resolution=(img_size // 2,
@@ -1397,7 +1408,7 @@ class Wformer(nn.Module):
                             token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
         
         self.upsample_3 = upsample(embed_dim*4, embed_dim)
-        self.decoderbuf_3 = WConvBlock(embed_dim*2, embed_dim*2, strides=1)
+        #self.decoderbuf_3 = WConvBlock(embed_dim*2, embed_dim*2, strides=1)
         self.decoderlayer_3 = BasicUformerLayer(dim=embed_dim*2,
                             output_dim=embed_dim*2,
                             input_resolution=(img_size,
@@ -1413,7 +1424,7 @@ class Wformer(nn.Module):
                             use_checkpoint=use_checkpoint,
                             token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
 
-        self.outbuf = WConvBlock(2*embed_dim, embed_dim, strides=1)
+        #self.outbuf = WConvBlock(2*embed_dim, embed_dim, strides=1)
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -1456,9 +1467,10 @@ class Wformer(nn.Module):
 
         # Bottleneck
         bot0 = self.Bottleneck_0(pool3, mask=mask)
+        bot0_conv = self.Bottleneck0_conv(bot0)
 
         # W-decoder
-        wup0 = self.Wup_0(bot0)
+        wup0 = self.Wup_0(bot0_conv)
         wconvd0 = self.Wconv_d0(wup0)
 
         wup1 = self.Wup_1(wconvd0)
@@ -1497,32 +1509,33 @@ class Wformer(nn.Module):
 
         # Bottleneck
         bot1 = self.Bottleneck_1(wdown3, mask=mask)
+        bot1_conv = self.Bottleneck1_conv(bot1_conv)
 
         #Decoder
-        up0 = torch.cat([bot0, bot1], -1)
+        up0 = torch.cat([bot0_conv, bot1_conv], -1)
         up0 = self.upsample_0(up0)
         deconv0 = torch.cat([up0,conv3],-1)
-        deconv0 = self.decoderbuf_0(deconv0)
+        #deconv0 = self.decoderbuf_0(deconv0)
         deconv0 = self.decoderlayer_0(deconv0,mask=mask)
         
         up1 = self.upsample_1(deconv0)
         deconv1 = torch.cat([up1,conv2],-1)
-        deconv1 = self.decoderbuf_1(deconv1)
+        #deconv1 = self.decoderbuf_1(deconv1)
         deconv1 = self.decoderlayer_1(deconv1,mask=mask)
 
         up2 = self.upsample_2(deconv1)
         deconv2 = torch.cat([up2,conv1],-1)
-        deconv2 = self.decoderbuf_2(deconv2)
+        #deconv2 = self.decoderbuf_2(deconv2)
         deconv2 = self.decoderlayer_2(deconv2,mask=mask)
 
         up3 = self.upsample_3(deconv2)
         deconv3 = torch.cat([up3,conv0],-1)
-        deconv3 = self.decoderbuf_3(deconv3)
+        #deconv3 = self.decoderbuf_3(deconv3)
         deconv3 = self.decoderlayer_3(deconv3,mask=mask)
 
-        outconv = self.outbuf(deconv3)
+        #outconv = self.outbuf(deconv3)
         # Output Projection
-        y = self.output_proj(outconv)
+        y = self.output_proj(deconv3)
         return x + y
 
     def flops(self):
@@ -1725,6 +1738,7 @@ class Uformer(nn.Module):
 
     def forward(self, x, mask=None):
         # Input Projection
+        #print(x.shape)
         y = self.input_proj(x)
         y = self.pos_drop(y)
         #Encoder

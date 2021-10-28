@@ -24,16 +24,16 @@ from skimage.metrics import peak_signal_noise_ratio as psnr_loss
 from skimage.metrics import structural_similarity as ssim_loss
 
 parser = argparse.ArgumentParser(description='RGB denoising evaluation on the validation set of SIDD')
-parser.add_argument('--input_dir', default='../uformer/datasets/denoising/sidd/test/',
+parser.add_argument('--input_dir', default='../datasets/LOL/test',
     type=str, help='Directory of validation images')
-parser.add_argument('--result_dir', default='./results/denoising/sidd/',
+parser.add_argument('--result_dir', default='./log/Uformer1_256_250/result_mit',
     type=str, help='Directory for results')
-parser.add_argument('--weights', default='./log/Uformer32_0806_1/models/model_best.pth',
+parser.add_argument('--weights', default='./log/Uformer1_256_250/models/model_best.pth',
     type=str, help='Path to weights')
 parser.add_argument('--gpus', default='0', type=str, help='CUDA_VISIBLE_DEVICES')
 parser.add_argument('--arch', default='Uformer', type=str, help='arch')
 parser.add_argument('--batch_size', default=1, type=int, help='Batch size for dataloader')
-parser.add_argument('--save_images', action='store_true', help='Save denoised images in result directory')
+parser.add_argument('--save_images', default=True, action='store_true', help='Save denoised images in result directory')
 parser.add_argument('--embed_dim', type=int, default=32, help='number of data loading workers')    
 parser.add_argument('--win_size', type=int, default=8, help='number of data loading workers')
 parser.add_argument('--token_projection', type=str,default='linear', help='linear/conv token projection')
@@ -48,7 +48,7 @@ parser.add_argument('--global_skip', action='store_true', default=False, help='g
 parser.add_argument('--local_skip', action='store_true', default=False, help='local skip connection')
 parser.add_argument('--vit_share', action='store_true', default=False, help='share vit module')
 
-parser.add_argument('--train_ps', type=int, default=128, help='patch size of training sample')
+parser.add_argument('--train_ps', type=int, default=256, help='patch size of training sample')
 args = parser.parse_args()
 
 
