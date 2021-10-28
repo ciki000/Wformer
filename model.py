@@ -1350,13 +1350,12 @@ class Wformer(nn.Module):
                             drop_path=conv_dpr,
                             norm_layer=norm_layer,
                             use_checkpoint=use_checkpoint,
-                            token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
-        
+                            token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer) 
         self.Bottleneck1_conv = WConvBlock(embed_dim*16, embed_dim*16, strides=1)
-        
 
         # Decoder
-        self.upsample_0 = upsample(embed_dim*32, embed_dim*8)
+        self.merge_conv_0 = WConvBlock(embed_dim*32, embed_dim*16, strides=1)
+        self.upsample_0 = upsample(embed_dim*16, embed_dim*8)
         #self.decoderbuf_0 = WConvBlock(embed_dim*16, embed_dim*16, strides=1)
         self.decoderlayer_0 = BasicUformerLayer(dim=embed_dim*16,
                             output_dim=embed_dim*16,
@@ -1373,7 +1372,8 @@ class Wformer(nn.Module):
                             use_checkpoint=use_checkpoint,
                             token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
         
-        self.upsample_1 = upsample(embed_dim*16, embed_dim*4)
+        self.merge_conv_1 = WConvBlock(embed_dim*16, embed_dim*8, strides=1)
+        self.upsample_1 = upsample(embed_dim*8, embed_dim*4)
         #self.decoderbuf_1 = WConvBlock(embed_dim*8, embed_dim*8, strides=1)
         self.decoderlayer_1 = BasicUformerLayer(dim=embed_dim*8,
                             output_dim=embed_dim*8,
@@ -1390,7 +1390,8 @@ class Wformer(nn.Module):
                             use_checkpoint=use_checkpoint,
                             token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
         
-        self.upsample_2 = upsample(embed_dim*8, embed_dim*2)
+        self.merge_conv_2 = WConvBlock(embed_dim*8, embed_dim*4, strides=1)
+        self.upsample_2 = upsample(embed_dim*4, embed_dim*2)
         #self.decoderbuf_2 = WConvBlock(embed_dim*4, embed_dim*4, strides=1)
         self.decoderlayer_2 = BasicUformerLayer(dim=embed_dim*4,
                             output_dim=embed_dim*4,
@@ -1407,7 +1408,8 @@ class Wformer(nn.Module):
                             use_checkpoint=use_checkpoint,
                             token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
         
-        self.upsample_3 = upsample(embed_dim*4, embed_dim)
+        self.merge_conv_3 = WConvBlock(embed_dim*4, embed_dim*2, strides=1)
+        self.upsample_3 = upsample(embed_dim*2, embed_dim)
         #self.decoderbuf_3 = WConvBlock(embed_dim*2, embed_dim*2, strides=1)
         self.decoderlayer_3 = BasicUformerLayer(dim=embed_dim*2,
                             output_dim=embed_dim*2,
@@ -1424,6 +1426,7 @@ class Wformer(nn.Module):
                             use_checkpoint=use_checkpoint,
                             token_projection=token_projection,token_mlp=token_mlp,se_layer=se_layer)
 
+        self.merge_conv_out = WConvBlock(embed_dim*2, embed_dim, strides=1)
         #self.outbuf = WConvBlock(2*embed_dim, embed_dim, strides=1)
         self.apply(self._init_weights)
 
@@ -1512,30 +1515,35 @@ class Wformer(nn.Module):
         bot1_conv = self.Bottleneck1_conv(bot1_conv)
 
         #Decoder
-        up0 = torch.cat([bot0_conv, bot1_conv], -1)
-        up0 = self.upsample_0(up0)
+        merge_conv0 = torch.cat([bot0_conv, bot1_conv], -1)
+        merge_conv0 = self.merge_conv0(merge_conv0)
+        up0 = self.upsample_0(merge_conv0)
         deconv0 = torch.cat([up0,conv3],-1)
         #deconv0 = self.decoderbuf_0(deconv0)
         deconv0 = self.decoderlayer_0(deconv0,mask=mask)
         
-        up1 = self.upsample_1(deconv0)
+        merge_conv1 = self.merge_conv1(dconv0)
+        up1 = self.upsample_1(merge_conv1)
         deconv1 = torch.cat([up1,conv2],-1)
         #deconv1 = self.decoderbuf_1(deconv1)
         deconv1 = self.decoderlayer_1(deconv1,mask=mask)
 
-        up2 = self.upsample_2(deconv1)
+        merge_conv2 = self.merge_conv2(dconv1)
+        up2 = self.upsample_2(merge_conv2)
         deconv2 = torch.cat([up2,conv1],-1)
         #deconv2 = self.decoderbuf_2(deconv2)
         deconv2 = self.decoderlayer_2(deconv2,mask=mask)
 
-        up3 = self.upsample_3(deconv2)
+        merge_conv3 = self.merge_conv3(dconv2)
+        up3 = self.upsample_3(merge_conv3)
         deconv3 = torch.cat([up3,conv0],-1)
         #deconv3 = self.decoderbuf_3(deconv3)
         deconv3 = self.decoderlayer_3(deconv3,mask=mask)
 
         #outconv = self.outbuf(deconv3)
         # Output Projection
-        y = self.output_proj(deconv3)
+        merge_conv4 = self.merge_conv_out(deconv3)
+        y = self.output_proj(merge_conv4)
         return x + y
 
     def flops(self):
