@@ -229,7 +229,7 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                     target = data_val[0].cuda()
                     valh, valw, input_ = tensorResize(data_val[1].cuda(), factor=128) 
                     filenames = data_val[2]
-                    reflex, restored = model_restoration(input_, 0)
+                    reflex, restored = model_restoration(input_, 1)
                      
                     #restored = torch.masked_select(restored,mask.bool()).reshape(target.shape[0], target.shape[1], target.shape[2], target.shape[3])
                     restored = torch.clamp(restored,0,1) 
