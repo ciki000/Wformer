@@ -1512,31 +1512,31 @@ class Wformer(nn.Module):
 
         # Bottleneck
         bot1 = self.Bottleneck_1(wdown3, mask=mask)
-        bot1_conv = self.Bottleneck1_conv(bot1_conv)
+        bot1_conv = self.Bottleneck1_conv(bot1)
 
         #Decoder
         merge_conv0 = torch.cat([bot0_conv, bot1_conv], -1)
-        merge_conv0 = self.merge_conv0(merge_conv0)
+        merge_conv0 = self.merge_conv_0(merge_conv0)
         up0 = self.upsample_0(merge_conv0)
-        deconv0 = torch.cat([up0,conv3],-1)
+        deconv0 = torch.cat([up0, eformer3],-1)
         #deconv0 = self.decoderbuf_0(deconv0)
         deconv0 = self.decoderlayer_0(deconv0,mask=mask)
         
-        merge_conv1 = self.merge_conv1(dconv0)
+        merge_conv1 = self.merge_conv_1(deconv0)
         up1 = self.upsample_1(merge_conv1)
-        deconv1 = torch.cat([up1,conv2],-1)
+        deconv1 = torch.cat([up1,eformer2],-1)
         #deconv1 = self.decoderbuf_1(deconv1)
         deconv1 = self.decoderlayer_1(deconv1,mask=mask)
 
-        merge_conv2 = self.merge_conv2(dconv1)
+        merge_conv2 = self.merge_conv_2(deconv1)
         up2 = self.upsample_2(merge_conv2)
-        deconv2 = torch.cat([up2,conv1],-1)
+        deconv2 = torch.cat([up2,eformer1],-1)
         #deconv2 = self.decoderbuf_2(deconv2)
         deconv2 = self.decoderlayer_2(deconv2,mask=mask)
 
-        merge_conv3 = self.merge_conv3(dconv2)
+        merge_conv3 = self.merge_conv_3(deconv2)
         up3 = self.upsample_3(merge_conv3)
-        deconv3 = torch.cat([up3,conv0],-1)
+        deconv3 = torch.cat([up3,eformer0],-1)
         #deconv3 = self.decoderbuf_3(deconv3)
         deconv3 = self.decoderlayer_3(deconv3,mask=mask)
 
@@ -1544,7 +1544,7 @@ class Wformer(nn.Module):
         # Output Projection
         merge_conv4 = self.merge_conv_out(deconv3)
         y = self.output_proj(merge_conv4)
-        return x + y
+        return x + mid_out, x + y
 
     def flops(self):
         flops = 0
