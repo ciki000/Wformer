@@ -68,6 +68,8 @@ def get_arch(opt):
         model_restoration = Uformer(img_size=opt.train_ps,embed_dim=32,win_size=8,token_projection='linear',token_mlp='leff')
     elif arch == 'Wformer':
         model_restoration = Wformer(img_size=opt.train_ps,embed_dim=opt.embed_dim,win_size=opt.win_size,token_projection=opt.token_projection,token_mlp=opt.token_mlp)
+    elif arch == 'Wnet':
+        model_restoration = Wnet(img_size=opt.train_ps,embed_dim=opt.embed_dim,win_size=opt.win_size,token_projection=opt.token_projection,token_mlp=opt.token_mlp)
     elif arch == 'Uformer_CatCross':
         model_restoration = Uformer_CatCross(img_size=opt.train_ps,embed_dim=opt.embed_dim,win_size=8,token_projection=opt.token_projection,token_mlp=opt.token_mlp)
     elif arch == 'Uformer_Cross':

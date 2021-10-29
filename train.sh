@@ -6,7 +6,7 @@
 
 # Uformer
 nohup python3 ./train.py --arch Uformer --batch_size 4 --gpu '0' \
-    --train_ps 256 --train_dir /home/mist/lowlight/datasets/lol/train --env 1_256_250\
+    --train_ps 256 --train_dir /home/mist/lowlight/datasets/lol/train --env 1_256_250_0\
     --val_dir ../datasets/LOL/valid --embed_dim 32 --warmup --nepoch 250 &
 
     
@@ -17,8 +17,8 @@ nohup python3 ./train.py --arch Uformer --batch_size 4 --gpu '0' \
 
 #stage0
 nohup python3 ./train_stage0.py --arch Wformer --batch_size 8 --gpu '0' \
-    --train_ps 256 --train_dir ../datasets/LOL_patches_mini --env 1_256_250 \
-    --val_dir ../datasets/LOL/valid --embed_dim 32 --warmup --nepoch=250  &
+    --train_ps 256 --train_dir /home/mist/lowlight/datasets/lol_R/train --env 1_R_256_250_0 \
+    --val_dir /home/mist/lowlight/datasets/lol_R/valid --embed_dim 32 --warmup --nepoch=250  &
 
 
 # #stage1

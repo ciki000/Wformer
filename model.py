@@ -1806,7 +1806,230 @@ class Uformer(nn.Module):
         flops += self.output_proj.flops(self.reso,self.reso)
         return flops
 
+class Wnet(nn.Module):
+    def __init__(self, img_size=128, in_chans=3,
+                 embed_dim=32, depths=[2, 2, 2, 2, 2, 2, 2, 2, 2], num_heads=[1, 2, 4, 8, 16, 16, 8, 4, 2],
+                 win_size=8, mlp_ratio=4., qkv_bias=True, qk_scale=None,
+                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
+                 norm_layer=nn.LayerNorm, patch_norm=True,
+                 use_checkpoint=False, token_projection='linear', token_mlp='ffn', se_layer=False,
+                 dowsample=Downsample, upsample=NearestUpsample, **kwargs):
+        super().__init__()
 
+        self.num_enc_layers = len(depths)//2
+        self.num_dec_layers = len(depths)//2
+        self.embed_dim = embed_dim
+        self.patch_norm = patch_norm
+        self.mlp_ratio = mlp_ratio
+        self.token_projection = token_projection
+        self.mlp = token_mlp
+        self.win_size =win_size
+        self.reso = img_size
+        self.pos_drop = nn.Dropout(p=drop_rate)
+
+        # stochastic depth
+        enc_dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths[:self.num_enc_layers]))] 
+        conv_dpr = [drop_path_rate]*depths[4]
+        dec_dpr = enc_dpr[::-1]
+
+        # build layers
+
+        # Input/Output
+        self.input_proj = InputProj(in_channel=in_chans, out_channel=embed_dim, kernel_size=3, stride=1, act_layer=nn.LeakyReLU)
+        self.output_proj = OutputProj(in_channel=embed_dim, out_channel=in_chans, kernel_size=3, stride=1)
+        
+        # Encoder
+        self.encoderlayer_0 = WConvBlock(embed_dim, embed_dim, strides=1)
+        self.dowsample_0 = dowsample(embed_dim, embed_dim*2)
+        self.encoderlayer_1 = WConvBlock(embed_dim*2, embed_dim*2, strides=1)
+        self.dowsample_1 = dowsample(embed_dim*2, embed_dim*4)
+        self.encoderlayer_2 = WConvBlock(embed_dim*4, embed_dim*4, strides=1)
+        self.dowsample_2 = dowsample(embed_dim*4, embed_dim*8)
+        self.encoderlayer_3 = WConvBlock(embed_dim*8, embed_dim*8, strides=1)
+        self.dowsample_3 = dowsample(embed_dim*8, embed_dim*16)
+
+        # Bottleneck0
+        self.Bottleneck_0 = WConvBlock(embed_dim*16, embed_dim*16)
+        self.Bottleneck0_conv = WConvBlock(embed_dim*16, embed_dim*16, strides=1)
+        
+        # W-Decoder
+        self.Wup_0 = upsample(embed_dim*16, embed_dim*8)
+        self.Wconv_d0 = WConvBlock(embed_dim*8, embed_dim*8, strides=1)
+        
+        self.Wup_1 = upsample(embed_dim*8, embed_dim*4)
+        self.Wconv_d1 = WConvBlock(embed_dim*4, embed_dim*4, strides=1)
+
+        self.Wup_2 = upsample(embed_dim*4, embed_dim*2)
+        self.Wconv_d2 = WConvBlock(embed_dim*2, embed_dim*2, strides=1)
+        
+        self.Wup_3 = upsample(embed_dim*2, embed_dim)
+        self.Wconv_d3 = WConvBlock(embed_dim, embed_dim, strides=1)
+        
+        # mid out
+        self.Wout = OutputProj(in_channel=embed_dim, out_channel=in_chans, kernel_size=3, stride=1)
+        self.Win = InputProj(in_channel=in_chans, out_channel=embed_dim, kernel_size=3, stride=1, act_layer=nn.LeakyReLU)
+        
+        # W-Encoder
+        self.Wconv_e0 = WConvBlock(embed_dim*2, embed_dim, strides=1)
+        self.Wdown_0 = dowsample(embed_dim, embed_dim*2)
+         
+        self.Wconv_e1 = WConvBlock(embed_dim*4, embed_dim*2, strides=1)
+        self.Wdown_1 = dowsample(embed_dim*2, embed_dim*4)
+        
+        self.Wconv_e2 = WConvBlock(embed_dim*8, embed_dim*4, strides=1)
+        self.Wdown_2 = dowsample(embed_dim*4, embed_dim*8)
+        
+        self.Wconv_e3 = WConvBlock(embed_dim*16, embed_dim*8, strides=1)
+        self.Wdown_3 = dowsample(embed_dim*8, embed_dim*16)
+
+        # Bottleneck1
+        self.Bottleneck_1 = WConvBlock(embed_dim*16, embed_dim*16, strides=1)
+        self.Bottleneck1_conv = WConvBlock(embed_dim*16, embed_dim*16, strides=1)
+
+        # Decoder
+        self.merge_conv_0 = WConvBlock(embed_dim*32, embed_dim*16, strides=1)
+        self.upsample_0 = upsample(embed_dim*16, embed_dim*8)
+        #self.decoderbuf_0 = WConvBlock(embed_dim*16, embed_dim*16, strides=1)
+        self.decoderlayer_0 = WConvBlock(embed_dim*16, embed_dim*16, strides=1)
+        
+        self.merge_conv_1 = WConvBlock(embed_dim*16, embed_dim*8, strides=1)
+        self.upsample_1 = upsample(embed_dim*8, embed_dim*4)
+        #self.decoderbuf_1 = WConvBlock(embed_dim*8, embed_dim*8, strides=1)
+        self.decoderlayer_1 = WConvBlock(embed_dim*8, embed_dim*8, strides=1)
+        
+        self.merge_conv_2 = WConvBlock(embed_dim*8, embed_dim*4, strides=1)
+        self.upsample_2 = upsample(embed_dim*4, embed_dim*2)
+        #self.decoderbuf_2 = WConvBlock(embed_dim*4, embed_dim*4, strides=1)
+        self.decoderlayer_2 = WConvBlock(embed_dim*4, embed_dim*4, strides=1)
+        
+        self.merge_conv_3 = WConvBlock(embed_dim*4, embed_dim*2, strides=1)
+        self.upsample_3 = upsample(embed_dim*2, embed_dim)
+        #self.decoderbuf_3 = WConvBlock(embed_dim*2, embed_dim*2, strides=1)
+        self.decoderlayer_3 = WConvBlock(embed_dim*2, embed_dim*2, strides=1)
+
+        self.merge_conv_out = WConvBlock(embed_dim*2, embed_dim, strides=1)
+        #self.outbuf = WConvBlock(2*embed_dim, embed_dim, strides=1)
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            trunc_normal_(m.weight, std=.02)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.LayerNorm):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
+
+    @torch.jit.ignore
+    def no_weight_decay(self):
+        return {'absolute_pos_embed'}
+
+    @torch.jit.ignore
+    def no_weight_decay_keywords(self):
+        return {'relative_position_bias_table'}
+
+    def extra_repr(self) -> str:
+        return f"embed_dim={self.embed_dim}, token_projection={self.token_projection}, token_mlp={self.mlp},win_size={self.win_size}"
+
+    def forward(self, x, stage, mask=None):
+        # Input Projection
+        y = self.input_proj(x)
+        y = self.pos_drop(y)
+        
+        #Encoder
+        eformer0 = self.encoderlayer_0(y,mask=mask)
+        pool0 = self.dowsample_0(eformer0)
+        
+        eformer1 = self.encoderlayer_1(pool0,mask=mask)
+        pool1 = self.dowsample_1(eformer1)
+        
+        eformer2 = self.encoderlayer_2(pool1,mask=mask)
+        pool2 = self.dowsample_2(eformer2)
+        
+        eformer3 = self.encoderlayer_3(pool2,mask=mask)
+        pool3 = self.dowsample_3(eformer3)
+
+        # Bottleneck
+        bot0 = self.Bottleneck_0(pool3, mask=mask)
+        bot0_conv = self.Bottleneck0_conv(bot0)
+
+        # W-decoder
+        wup0 = self.Wup_0(bot0_conv)
+        wconvd0 = self.Wconv_d0(wup0)
+
+        wup1 = self.Wup_1(wconvd0)
+        wconvd1 = self.Wconv_d1(wup1)
+
+        wup2 = self.Wup_2(wconvd1)
+        wconvd2 = self.Wconv_d2(wup2)
+
+        wup3 = self.Wup_3(wconvd2)
+        wconvd3 = self.Wconv_d3(wup3)
+
+        # mid out
+        mid_out = self.Wout(wconvd3)
+
+        if (stage == 0):
+            return x + mid_out
+        
+        mid_in = self.Win(mid_out)
+
+        # W-Encoder
+        wconve0 = torch.cat([mid_in, wconvd3], -1)
+        wconve0 = self.Wconv_e0(wconve0)
+        wdown0 = self.Wdown_0(wconve0)
+
+        wconve1 = torch.cat([wdown0, wconvd2], -1)
+        wconve1 = self.Wconv_e1(wconve1)
+        wdown1 = self.Wdown_1(wconve1)
+
+        wconve2 = torch.cat([wdown1, wconvd1], -1)
+        wconve2 = self.Wconv_e2(wconve2)
+        wdown2 = self.Wdown_2(wconve2)
+
+        wconve3 = torch.cat([wdown2, wconvd0], -1)
+        wconve3 = self.Wconv_e3(wconve3)
+        wdown3 = self.Wdown_3(wconve3)
+
+        # Bottleneck
+        bot1 = self.Bottleneck_1(wdown3, mask=mask)
+        bot1_conv = self.Bottleneck1_conv(bot1)
+
+        #Decoder
+        merge_conv0 = torch.cat([bot0_conv, bot1_conv], -1)
+        merge_conv0 = self.merge_conv_0(merge_conv0)
+        up0 = self.upsample_0(merge_conv0)
+        deconv0 = torch.cat([up0, eformer3],-1)
+        #deconv0 = self.decoderbuf_0(deconv0)
+        deconv0 = self.decoderlayer_0(deconv0,mask=mask)
+        
+        merge_conv1 = self.merge_conv_1(deconv0)
+        up1 = self.upsample_1(merge_conv1)
+        deconv1 = torch.cat([up1,eformer2],-1)
+        #deconv1 = self.decoderbuf_1(deconv1)
+        deconv1 = self.decoderlayer_1(deconv1,mask=mask)
+
+        merge_conv2 = self.merge_conv_2(deconv1)
+        up2 = self.upsample_2(merge_conv2)
+        deconv2 = torch.cat([up2,eformer1],-1)
+        #deconv2 = self.decoderbuf_2(deconv2)
+        deconv2 = self.decoderlayer_2(deconv2,mask=mask)
+
+        merge_conv3 = self.merge_conv_3(deconv2)
+        up3 = self.upsample_3(merge_conv3)
+        deconv3 = torch.cat([up3,eformer0],-1)
+        #deconv3 = self.decoderbuf_3(deconv3)
+        deconv3 = self.decoderlayer_3(deconv3,mask=mask)
+
+        #outconv = self.outbuf(deconv3)
+        # Output Projection
+        merge_conv4 = self.merge_conv_out(deconv3)
+        y = self.output_proj(merge_conv4)
+        return x + mid_out, x + y
+
+    def flops(self):
+        flops = 0
+        return flops
 
 class Uformer_Cross(nn.Module):
     def __init__(self, img_size=128, in_chans=3,
