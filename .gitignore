@@ -142,3 +142,4 @@ cython_debug/
 
 #ignore nohup
 nohup.out
+train.sh
