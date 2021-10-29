@@ -30,3 +30,8 @@ nohup python3 ./train_stage0.py --arch Wformer --batch_size 8 --gpu '0' \
 # nohup python3 ./train_1_resume.py --arch Uformer --batch_size 16 --gpu '0' \
 #     --train_ps 64 --train_dir /home/mist/lowlight/datasets/lol_stage1/train --env 32_1006_1_2 \
 #     --val_dir /home/mist/lowlight/datasets/lol_stage1/valid --embed_dim 32  --nepoch 150  --lr_initial 0.000001 &
+
+#Wnet
+nohup python3 ./train_stage0.py --arch Wnet --batch_size 8 --gpu '0' \
+    --train_ps 256 --train_dir ../datasets/LOL_patches_mini --env 1_256_250_0 \
+    --val_dir ../datasets/LOL/valid --embed_dim 32 --warmup --nepoch=250  &
