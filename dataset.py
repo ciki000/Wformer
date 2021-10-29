@@ -65,6 +65,62 @@ class DataLoaderTrain(Dataset):
 
         return clean, noisy, clean_filename, noisy_filename
 
+class DataLoaderTrain_R(Dataset):
+    def __init__(self, rgb_dir, img_options=None, target_transform=None):
+        super(DataLoaderTrain_R, self).__init__()
+
+        self.target_transform = target_transform
+        
+        gt_dir = 'groundtruth'
+        input_dir = 'input'
+        
+        clean_files = sorted(os.listdir(os.path.join(rgb_dir, gt_dir)))
+        noisy_files = sorted(os.listdir(os.path.join(rgb_dir, input_dir)))
+        
+        self.clean_filenames = [os.path.join(rgb_dir, gt_dir, x) for x in clean_files if is_png_file(x)]
+        self.noisy_filenames = [os.path.join(rgb_dir, input_dir, x)       for x in noisy_files if is_png_file(x)]
+        
+        self.img_options=img_options
+
+        self.tar_size = len(self.clean_filenames)  # get the size of target
+
+    def __len__(self):
+        return self.tar_size
+
+    def __getitem__(self, index):
+        tar_index   = index % self.tar_size
+        clean_arr = load_img(self.clean_filenames[tar_index])
+        noisy_arr = load_img(self.noisy_filenames[tar_index])
+        clean = torch.from_numpy(np.float32(clean_arr))
+        noisy = torch.from_numpy(np.float32(noisy_arr))
+        
+        clean = clean.permute(2,0,1)
+        noisy = noisy.permute(2,0,1)
+
+        clean_filename = os.path.split(self.clean_filenames[tar_index])[-1]
+        noisy_filename = os.path.split(self.noisy_filenames[tar_index])[-1]
+
+        #Crop Input and Target
+        ps = self.img_options['patch_size']
+        H = clean.shape[1]
+        W = clean.shape[2]
+        # r = np.random.randint(0, H - ps) if not H-ps else 0
+        # c = np.random.randint(0, W - ps) if not H-ps else 0
+        if H-ps==0:
+            r=0
+            c=0
+        else:
+            r = np.random.randint(0, H - ps)
+            c = np.random.randint(0, W - ps)
+        clean = clean[:, r:r + ps, c:c + ps]
+        noisy = noisy[:, r:r + ps, c:c + ps]
+
+        apply_trans = transforms_aug[random.getrandbits(3)]
+
+        clean = getattr(augment, apply_trans)(clean)
+        noisy = getattr(augment, apply_trans)(noisy)        
+
+        return clean, noisy, clean_filename, noisy_filename
 ##################################################################################################
 
 class DataLoaderTrain_Gaussian(Dataset):

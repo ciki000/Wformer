@@ -23,11 +23,11 @@ from skimage.metrics import peak_signal_noise_ratio as psnr_loss
 from skimage.metrics import structural_similarity as ssim_loss
 from skimage.transform import resize
 
-stage = 0
+stage = 1
 parser = argparse.ArgumentParser(description='RGB denoising evaluation on the validation set of SIDD')
-parser.add_argument('--input_dir', default='/home/mist/lowlight/datasets/lol_R/test',type=str, help='Directory of validation images')
-parser.add_argument('--result_dir', default='./log/Wformer1_R_256_250_0/result_lol',type=str, help='Directory for results')
-parser.add_argument('--weights', default='./log/Wformer1_R_256_250_0/models/model_best.pth',type=str, help='Path to weights')
+parser.add_argument('--input_dir', default='../datasets/mit500/test',type=str, help='Directory of validation images')
+parser.add_argument('--result_dir', default='./log/Wformer1_256_250_1/result_mit',type=str, help='Directory for results')
+parser.add_argument('--weights', default='./log/Wformer1_256_250_1/models/model_best.pth',type=str, help='Path to weights')
 parser.add_argument('--gpus', default='0', type=str, help='CUDA_VISIBLE_DEVICES')
 parser.add_argument('--arch', default='Wformer', type=str, help='arch')
 parser.add_argument('--batch_size', default=1, type=int, help='Batch size for dataloader')
@@ -97,8 +97,10 @@ with torch.no_grad():
         rgb_noisy = input.cuda()
         filenames = data_test[2]
 
-
-        rgb_restored = model_restoration(rgb_noisy, stage)
+        if stage == 0:
+            rgb_restored = model_restoration(rgb_noisy, stage)
+        else:
+            _, rgb_restored = model_restoration(rgb_noisy, stage)
         rgb_restored = torch.clamp(rgb_restored,0,1).cpu().numpy().squeeze().transpose((1,2,0))
         psnr_val_rgb.append(psnr_loss(rgb_restored, rgb_gt))
         ssim_val_rgb.append(ssim_loss(rgb_restored, rgb_gt, multichannel=True))
