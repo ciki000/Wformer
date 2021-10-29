@@ -1937,20 +1937,20 @@ class Wnet(nn.Module):
         y = self.pos_drop(y)
         
         #Encoder
-        eformer0 = self.encoderlayer_0(y,mask=mask)
+        eformer0 = self.encoderlayer_0(y)
         pool0 = self.dowsample_0(eformer0)
         
-        eformer1 = self.encoderlayer_1(pool0,mask=mask)
+        eformer1 = self.encoderlayer_1(pool0)
         pool1 = self.dowsample_1(eformer1)
         
-        eformer2 = self.encoderlayer_2(pool1,mask=mask)
+        eformer2 = self.encoderlayer_2(pool1)
         pool2 = self.dowsample_2(eformer2)
         
-        eformer3 = self.encoderlayer_3(pool2,mask=mask)
+        eformer3 = self.encoderlayer_3(pool2)
         pool3 = self.dowsample_3(eformer3)
 
         # Bottleneck
-        bot0 = self.Bottleneck_0(pool3, mask=mask)
+        bot0 = self.Bottleneck_0(pool3)
         bot0_conv = self.Bottleneck0_conv(bot0)
 
         # W-decoder
@@ -1992,7 +1992,7 @@ class Wnet(nn.Module):
         wdown3 = self.Wdown_3(wconve3)
 
         # Bottleneck
-        bot1 = self.Bottleneck_1(wdown3, mask=mask)
+        bot1 = self.Bottleneck_1(wdown3)
         bot1_conv = self.Bottleneck1_conv(bot1)
 
         #Decoder
@@ -2001,25 +2001,25 @@ class Wnet(nn.Module):
         up0 = self.upsample_0(merge_conv0)
         deconv0 = torch.cat([up0, eformer3],-1)
         #deconv0 = self.decoderbuf_0(deconv0)
-        deconv0 = self.decoderlayer_0(deconv0,mask=mask)
+        deconv0 = self.decoderlayer_0(deconv0)
         
         merge_conv1 = self.merge_conv_1(deconv0)
         up1 = self.upsample_1(merge_conv1)
         deconv1 = torch.cat([up1,eformer2],-1)
         #deconv1 = self.decoderbuf_1(deconv1)
-        deconv1 = self.decoderlayer_1(deconv1,mask=mask)
+        deconv1 = self.decoderlayer_1(deconv1)
 
         merge_conv2 = self.merge_conv_2(deconv1)
         up2 = self.upsample_2(merge_conv2)
         deconv2 = torch.cat([up2,eformer1],-1)
         #deconv2 = self.decoderbuf_2(deconv2)
-        deconv2 = self.decoderlayer_2(deconv2,mask=mask)
+        deconv2 = self.decoderlayer_2(deconv2)
 
         merge_conv3 = self.merge_conv_3(deconv2)
         up3 = self.upsample_3(merge_conv3)
         deconv3 = torch.cat([up3,eformer0],-1)
         #deconv3 = self.decoderbuf_3(deconv3)
-        deconv3 = self.decoderlayer_3(deconv3,mask=mask)
+        deconv3 = self.decoderlayer_3(deconv3)
 
         #outconv = self.outbuf(deconv3)
         # Output Projection
