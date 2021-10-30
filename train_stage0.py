@@ -34,7 +34,7 @@ from einops import rearrange, repeat
 import datetime
 from pdb import set_trace as stx
 
-from losses import CharbonnierLoss,SSIMLoss
+from losses import CharbonnierLoss,SSIMLoss,TVLoss
 
 from tqdm import tqdm 
 from warmup_scheduler import GradualWarmupScheduler
@@ -149,7 +149,8 @@ else:
 
 
 ######### Loss ###########
-criterion = SSIMLoss().cuda()
+criterion0 = SSIMLoss().cuda()
+criterion1 = TVLoss().cuda()
 
 ######### DataLoader ###########
 print('===> Loading datasets')
@@ -202,7 +203,9 @@ for epoch in range(start_epoch, opt.nepoch + 1):
         #with torch.cuda.amp.autocast():
         restored = model_restoration(input_, 0)
         restored = torch.clamp(restored,0,1)  
-        loss = criterion(restored, target)
+        loss0 = criterion0(restored, target)
+        loss1 = criterion1(restored)
+        loss = loss0 + 0.005*loss1
         loss_scaler(
                 loss, optimizer,parameters=model_restoration.parameters())
         epoch_loss +=loss.item()
