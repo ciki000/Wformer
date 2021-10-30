@@ -5,6 +5,8 @@ import torch
 from utils import is_png_file, load_img, Augment_RGB_torch
 import torch.nn.functional as F
 import random
+import math
+from skimage.transform import resize
 
 augment   = Augment_RGB_torch()
 transforms_aug = [method for method in dir(augment) if callable(getattr(augment, method)) if not method.startswith('_')] 
@@ -178,16 +180,15 @@ class DataLoaderTrain_Gaussian(Dataset):
         return clean, noisy, clean_filename, noisy_filename
 ##################################################################################################
 def tensorResize(timg, factor=128):
-    b, c, h, w = timg.size()
+    c, h, w = timg.size()
     X = int(math.ceil(max(h,w)/float(factor))*factor)
 
     np_arr = timg.cpu().detach().numpy()
-    np_arr = np_arr[0].transpose((1,2,0))
+    np_arr = np_arr.transpose((1,2,0))
 
     #Image resize
     im_np_resize = resize(np_arr, (X, X))
     im_np_resize = im_np_resize.transpose((2,0,1))
-    im_np_resize = im_np_resize[np.newaxis,:]
 
     return torch.from_numpy(im_np_resize)
 
@@ -225,8 +226,10 @@ class DataLoaderVal(Dataset):
         clean = clean.permute(2,0,1)
         noisy = noisy.permute(2,0,1)
 
-        clean = tensorResize(clean, factor=128) 
-        noisy = tensorResize(noisy, factor=128) 
+        #print('before', clean.shape)
+        #clean = tensorResize(clean, factor=128) 
+        #print('after', clean.shape)
+        #noisy = tensorResize(noisy, factor=128) 
         return clean, noisy, clean_filename, noisy_filename
 
 ##################################################################################################
