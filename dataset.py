@@ -177,6 +177,20 @@ class DataLoaderTrain_Gaussian(Dataset):
 
         return clean, noisy, clean_filename, noisy_filename
 ##################################################################################################
+def tensorResize(timg, factor=128):
+    b, c, h, w = timg.size()
+    X = int(math.ceil(max(h,w)/float(factor))*factor)
+
+    np_arr = timg.cpu().detach().numpy()
+    np_arr = np_arr[0].transpose((1,2,0))
+
+    #Image resize
+    im_np_resize = resize(np_arr, (X, X))
+    im_np_resize = im_np_resize.transpose((2,0,1))
+    im_np_resize = im_np_resize[np.newaxis,:]
+
+    return torch.from_numpy(im_np_resize)
+
 class DataLoaderVal(Dataset):
     def __init__(self, rgb_dir, target_transform=None):
         super(DataLoaderVal, self).__init__()
@@ -202,7 +216,6 @@ class DataLoaderVal(Dataset):
     def __getitem__(self, index):
         tar_index   = index % self.tar_size
         
-
         clean = torch.from_numpy(np.float32(load_img(self.clean_filenames[tar_index])))
         noisy = torch.from_numpy(np.float32(load_img(self.noisy_filenames[tar_index])))
                 
@@ -212,6 +225,8 @@ class DataLoaderVal(Dataset):
         clean = clean.permute(2,0,1)
         noisy = noisy.permute(2,0,1)
 
+        clean = tensorResize(clean, factor=128) 
+        noisy = tensorResize(noisy, factor=128) 
         return clean, noisy, clean_filename, noisy_filename
 
 ##################################################################################################

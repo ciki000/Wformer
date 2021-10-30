@@ -182,7 +182,7 @@ print('===> Start Epoch {} End Epoch {}'.format(start_epoch,opt.nepoch))
 best_psnr = 0
 best_epoch = 0
 best_iter = 0
-eval_now = len(train_loader)//4
+eval_now = len(train_loader)//2
 print("\nEvaluation after every {} Iterations !!!\n".format(eval_now))
 
 loss_scaler = NativeScaler()
@@ -217,14 +217,14 @@ for epoch in range(start_epoch, opt.nepoch + 1):
                 psnr_val_rgb = []
                 for ii, data_val in enumerate((val_loader), 0):
                     target = data_val[0].cuda()
-                    valh, valw, input_ = tensorResize(data_val[1].cuda(), factor=128) 
+                    input_ = data_val[1].cuda()
                     filenames = data_val[2]
                     restored = model_restoration(input_, 0)
                      
                     #restored = torch.masked_select(restored,mask.bool()).reshape(target.shape[0], target.shape[1], target.shape[2], target.shape[3])
                     restored = torch.clamp(restored,0,1) 
 
-                    restored = recover(restored, valh, valw)
+                    #restored = recover(restored, valh, valw)
                     psnr_val_rgb.append(utils.batch_PSNR(restored, target, False).item())
 
                 psnr_val_rgb = sum(psnr_val_rgb)/len_valset
